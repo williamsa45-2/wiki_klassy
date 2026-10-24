@@ -1,0 +1,66 @@
+# Wiki Klassy completa en contenedores (VPS, o local para probar igual que en el servidor).
+# Uso: cp .env.produccion.example .env  ->  editar  ->  ./deploy/levantar.sh
+# Guía: DEPLOY.md
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_datos:/data/db
+    # Sin puertos publicados: solo el backend, por la red interna de Docker, llega a la base.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok ? quit(0) : quit(1)"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      target: produccion
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # Dentro de Docker la base es siempre el contenedor `mongo`, sin importar lo que diga .env.
+      MONGO_URI: mongodb://mongo:27017/${MONGO_DB:-wiki_klassy}
+      CARPETA_ARCHIVOS: /app/uploads
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (openssl rand -hex 32)}
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      target: produccion
+    restart: unless-stopped
+    ports:
+      - "${PUERTO_WEB:-80}:80"
+    depends_on:
+      - backend
+
+  # Crear el primer administrador: docker compose run --rm herramientas npm run crear-admin -- correo "Nombre" "clave"
+  herramientas:
+    build:
+      context: ./backend
+      target: herramientas
+    profiles: ["herramientas"]
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/${MONGO_DB:-wiki_klassy}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_datos:
+  uploads:
