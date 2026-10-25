@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, type ReactNode, useState } from 'react';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
@@ -29,11 +29,11 @@ import {
 } from '../hooks/useUsuarios';
 import { mensajeDeError } from '../lib/api';
 import { fechaHora, tiempoRestante } from '../lib/fechas';
-import { NOMBRES_TIPO, type TipoArchivo, type Usuario, type Vigencia } from '../types/api';
+import { NOMBRES_TIPO, type Rol, type TipoArchivo, type Usuario, type Vigencia } from '../types/api';
 
 const TIPOS = Object.keys(NOMBRES_TIPO) as TipoArchivo[];
 
-function DrawerVigencia({ titulo, subtitulo, hint, onClose, onGuardar, error, pendiente }: {
+function DrawerVigencia({ titulo, subtitulo, hint, onClose, onGuardar, error, pendiente, children }: {
   titulo: string;
   subtitulo?: string;
   hint?: string;
@@ -41,6 +41,7 @@ function DrawerVigencia({ titulo, subtitulo, hint, onClose, onGuardar, error, pe
   onGuardar: (v: Vigencia) => void;
   error?: unknown;
   pendiente: boolean;
+  children?: ReactNode;
 }) {
   const [vigencia, setVigencia] = useState<Vigencia>({});
   return (
@@ -55,6 +56,7 @@ function DrawerVigencia({ titulo, subtitulo, hint, onClose, onGuardar, error, pe
       }}
       isSubmitting={pendiente}
     >
+      {children}
       <SelectorVigencia label="¿Hasta cuándo puede entrar?" onChange={setVigencia} hint={hint} />
       {error != null && <Alert tone="error">{mensajeDeError(error)}</Alert>}
     </Drawer>
@@ -238,6 +240,7 @@ export default function UsuariosPage() {
   const rol = useCambiarRol();
   const acceso = useFijarAccesoHasta();
   const [accion, setAccion] = useState<Accion | null>(null);
+  const [rolAprobacion, setRolAprobacion] = useState<Rol>('USUARIO');
 
   const error = rechazar.error ?? estado.error ?? rol.error;
   const cerrar = () => setAccion(null);
@@ -286,7 +289,7 @@ export default function UsuariosPage() {
               <Td>
                 <div className="flex justify-end gap-2">
                   {(u.estado === 'PENDIENTE' || u.estado === 'RECHAZADO') && (
-                    <IconButton tone="success" label="Aprobar" icon={<CheckIcon />} onClick={() => setAccion({ tipo: 'aprobar', usuario: u })} />
+                    <IconButton tone="success" label="Aprobar" icon={<CheckIcon />} onClick={() => { setRolAprobacion('USUARIO'); setAccion({ tipo: 'aprobar', usuario: u }); }} />
                   )}
                   {u.estado === 'PENDIENTE' && (
                     <IconButton tone="danger" label="Rechazar" icon={<XIcon />} onClick={() => confirm(`¿Rechazar la solicitud de ${u.email}?`) && rechazar.mutate(u.id)} />
@@ -330,8 +333,18 @@ export default function UsuariosPage() {
           pendiente={aprobar.isPending}
           error={aprobar.error}
           onClose={cerrar}
-          onGuardar={(v) => aprobar.mutate({ id: accion.usuario.id, ...v }, { onSuccess: cerrar })}
-        />
+          onGuardar={(v) => aprobar.mutate({ id: accion.usuario.id, rol: rolAprobacion, ...v }, { onSuccess: cerrar })}
+        >
+          <Select
+            label="Tipo de cuenta"
+            value={rolAprobacion}
+            onChange={(e) => setRolAprobacion(e.target.value as Rol)}
+            hint={rolAprobacion === 'ADMIN' ? 'Podrá ver y descargar todo y gestionar usuarios y permisos.' : 'Solo verá lo que le concedas en «Permisos».'}
+          >
+            <option value="USUARIO">Usuario normal</option>
+            <option value="ADMIN">Administrador</option>
+          </Select>
+        </DrawerVigencia>
       )}
       {accion?.tipo === 'vigencia' && (
         <DrawerVigencia

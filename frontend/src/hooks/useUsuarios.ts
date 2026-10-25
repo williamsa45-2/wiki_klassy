@@ -13,7 +13,7 @@ function useInvalidarUsuarios() {
 
 export function useAprobarSolicitud() {
   const invalidar = useInvalidarUsuarios();
-  return useMutation({ mutationFn: ({ id, ...vigencia }: { id: string } & Vigencia) => api.post(`/usuarios/${id}/aprobar`, vigencia), onSuccess: invalidar });
+  return useMutation({ mutationFn: ({ id, ...datos }: { id: string; rol: Rol } & Vigencia) => api.post(`/usuarios/${id}/aprobar`, datos), onSuccess: invalidar });
 }
 
 export function useRechazarSolicitud() {

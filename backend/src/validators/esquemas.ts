@@ -29,7 +29,7 @@ const limite = {
   hasta: Joi.date().iso().allow(null),
 };
 
-export const aprobacion = Joi.object(limite).oxor('duracion_minutos', 'hasta');
+export const aprobacion = Joi.object({ ...limite, rol: Joi.string().valid(...Object.values(ROLES)).default(ROLES.USUARIO) }).oxor('duracion_minutos', 'hasta');
 export const accesoHasta = Joi.object(limite).oxor('duracion_minutos', 'hasta');
 
 export const estadoUsuario = Joi.object({ estado: Joi.string().valid('ACTIVO', 'INACTIVO').required() });

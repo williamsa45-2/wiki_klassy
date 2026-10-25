@@ -15,8 +15,8 @@ export async function listar(req: Request, res: Response) {
 }
 
 export async function aprobar(req: Request, res: Response) {
-  const usuario = await usuarios.aprobarSolicitud(id(req), limiteDe(req));
-  await auditar(req, `Aprobó a ${usuario.email}`);
+  const usuario = await usuarios.aprobarSolicitud(id(req), limiteDe(req), req.body.rol);
+  await auditar(req, `Aprobó a ${usuario.email} como ${usuario.rol}`);
   res.json(usuario);
 }
 

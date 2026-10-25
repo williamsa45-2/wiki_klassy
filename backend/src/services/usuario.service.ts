@@ -30,10 +30,11 @@ export async function listarUsuarios(estado?: string) {
   return usuarios.map(vistaUsuario);
 }
 
-export async function aprobarSolicitud(id: string, limite: Date | null) {
+export async function aprobarSolicitud(id: string, limite: Date | null, rol: Rol) {
   const user = await buscarUsuario(id);
   if (user.estado !== ESTADOS_USUARIO.PENDIENTE && user.estado !== ESTADOS_USUARIO.RECHAZADO) throw new ApiError(409, 'Esa cuenta no está pendiente.');
   user.estado = ESTADOS_USUARIO.ACTIVO;
+  user.rol = rol;
   user.acceso_hasta = limite;
   await user.save();
   return vistaUsuario(user);
