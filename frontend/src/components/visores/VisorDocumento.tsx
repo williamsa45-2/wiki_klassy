@@ -2,8 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { renderAsync } from 'docx-preview';
 import { useEffect, useRef, useState } from 'react';
 import { api, mensajeDeError } from '../../lib/api';
+import { hojasDeDrawio, type HojaDrawio } from '../../lib/drawio';
 import type { Documento } from '../../types/api';
 import { Alert } from '../ui/Alert';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Field';
+import { ArrowLeftIcon, ChevronRightIcon } from '../ui/icons';
 import { Spinner } from '../ui/Spinner';
 
 /** Los bytes se piden con sesión y viven solo en memoria: no hay una URL que se pueda compartir o abrir sin permiso. */
@@ -63,30 +67,74 @@ const ORIGEN_DRAWIO = 'https://embed.diagrams.net';
 // lightbox=1 + chrome=0: modo visor, sin barras de edición; el XML viaja por postMessage, no se sube a ningún servidor.
 const URL_DRAWIO = `${ORIGEN_DRAWIO}/?embed=1&proto=json&spin=1&ui=min&lightbox=1&chrome=0&noSaveBtn=1&noExitBtn=1`;
 
+/**
+ * El visor sin barras (chrome=0) no muestra las pestañas de hojas de draw.io: la wiki muestra el nombre de cada hoja
+ * como su título y deja elegirla. Al visor se le manda una sola hoja a la vez.
+ */
 function VisorDrawio({ blob, titulo }: { blob: Blob; titulo: string }) {
   const marco = useRef<HTMLIFrameElement>(null);
+  const [hojas, setHojas] = useState<HojaDrawio[]>([]);
+  const [indice, setIndice] = useState(0);
+  const [listo, setListo] = useState(false);
+
   useEffect(() => {
-    let xml: string | null = null;
-    void blob.text().then((t) => {
-      xml = t;
-    });
-    const alMensaje = async (e: MessageEvent) => {
+    setIndice(0);
+    void blob.text().then((t) => setHojas(hojasDeDrawio(t)));
+  }, [blob]);
+
+  useEffect(() => {
+    const alMensaje = (e: MessageEvent) => {
       if (e.origin !== ORIGEN_DRAWIO || e.source !== marco.current?.contentWindow) return;
-      let datos: { event?: string } = {};
       try {
-        datos = JSON.parse(e.data as string);
+        if (JSON.parse(e.data as string).event === 'init') setListo(true);
       } catch {
-        return;
-      }
-      if (datos.event === 'init') {
-        xml ??= await blob.text();
-        marco.current?.contentWindow?.postMessage(JSON.stringify({ action: 'load', xml, autosave: 0 }), ORIGEN_DRAWIO);
+        // Mensajes que no son JSON no son del protocolo del visor.
       }
     };
     window.addEventListener('message', alMensaje);
     return () => window.removeEventListener('message', alMensaje);
-  }, [blob]);
-  return <iframe ref={marco} title={titulo} src={URL_DRAWIO} className="h-[75vh] w-full rounded-lg border border-border bg-surface" />;
+  }, []);
+
+  const hoja = hojas[indice];
+  useEffect(() => {
+    if (listo && hoja) marco.current?.contentWindow?.postMessage(JSON.stringify({ action: 'load', xml: hoja.xml, autosave: 0 }), ORIGEN_DRAWIO);
+  }, [listo, hoja]);
+
+  const nombreDe = (h: HojaDrawio, i: number) => h.nombre || `Hoja ${i + 1}`;
+  return (
+    <div className="space-y-3">
+      {hoja && (hojas.length > 1 || hoja.nombre) && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-h3 text-ink">{nombreDe(hoja, indice)}</h2>
+            {hojas.length > 1 && (
+              <p className="text-xs text-muted">
+                Diagrama {indice + 1} de {hojas.length}
+              </p>
+            )}
+          </div>
+          {hojas.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => setIndice((i) => i - 1)} disabled={indice === 0} aria-label="Diagrama anterior">
+                <ArrowLeftIcon className="h-4 w-4" />
+              </Button>
+              <Select label="Diagrama" hideLabel value={indice} onChange={(e) => setIndice(Number(e.target.value))}>
+                {hojas.map((h, i) => (
+                  <option key={i} value={i}>
+                    {i + 1}. {nombreDe(h, i)}
+                  </option>
+                ))}
+              </Select>
+              <Button variant="secondary" onClick={() => setIndice((i) => i + 1)} disabled={indice === hojas.length - 1} aria-label="Diagrama siguiente">
+                <ChevronRightIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+      <iframe ref={marco} title={hoja?.nombre || titulo} src={URL_DRAWIO} className="h-[75vh] w-full rounded-lg border border-border bg-surface" />
+    </div>
+  );
 }
 
 export function VisorDocumento({ doc }: { doc: Documento }) {
