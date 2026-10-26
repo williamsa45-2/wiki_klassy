@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { Documento, Seccion, TipoArchivo } from '../types/api';
+import type { Actividad, Documento, Seccion, TipoArchivo } from '../types/api';
 
 export interface FiltrosDocumentos {
   q?: string;
@@ -28,11 +28,17 @@ export function useDocumento(id: string | undefined) {
   return useQuery({ queryKey: ['documentos', 'uno', id], queryFn: () => api.get<Documento>(`/documentos/${id}`), enabled: !!id, staleTime: 0 });
 }
 
+// Bajo 'documentos': toda mutación de contenido ya invalida ese prefijo, así el historial se refresca solo.
+export function useHistorialDocumento(id: string | undefined, enabled: boolean) {
+  return useQuery({ queryKey: ['documentos', 'historial', id], queryFn: () => api.get<Actividad[]>(`/documentos/${id}/historial`), enabled: enabled && !!id, staleTime: 0 });
+}
+
 function useInvalidarContenido() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: ['documentos'] });
     void queryClient.invalidateQueries({ queryKey: ['secciones'] });
+    void queryClient.invalidateQueries({ queryKey: ['actividad'] });
   };
 }
 

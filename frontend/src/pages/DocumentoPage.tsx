@@ -1,13 +1,16 @@
 import { useMutation } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
+import { TablaHistorial } from '../components/historial/TablaHistorial';
 import { VisorDocumento } from '../components/visores/VisorDocumento';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
+import { Card, CardHeader } from '../components/ui/Card';
 import { Chip } from '../components/ui/Chip';
 import { ArrowLeftIcon, DownloadIcon, LockIcon } from '../components/ui/icons';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Spinner } from '../components/ui/Spinner';
-import { useDocumento } from '../hooks/useBiblioteca';
+import { useAuth } from '../context/AuthContext';
+import { useDocumento, useHistorialDocumento } from '../hooks/useBiblioteca';
 import { mensajeDeError } from '../lib/api';
 import { descargarArchivo } from '../lib/descargas';
 import { fecha, tamanoLegible } from '../lib/fechas';
@@ -16,6 +19,8 @@ import { NOMBRES_TIPO } from '../types/api';
 export default function DocumentoPage() {
   const { id } = useParams();
   const { data: doc, isLoading, error } = useDocumento(id);
+  const { esAdmin } = useAuth();
+  const historial = useHistorialDocumento(id, esAdmin);
   const descargar = useMutation({ mutationFn: descargarArchivo });
 
   if (isLoading) return <Spinner />;
@@ -64,6 +69,13 @@ export default function DocumentoPage() {
       </div>
       {descargar.isError && <Alert tone="error">{mensajeDeError(descargar.error)}</Alert>}
       <VisorDocumento doc={doc} />
+      {esAdmin && (
+        <Card>
+          <CardHeader title="Historial" subtitle="Quién lo agregó, actualizó o editó, y cuándo." />
+          {historial.isError && <Alert tone="error">{mensajeDeError(historial.error)}</Alert>}
+          <TablaHistorial filas={historial.data} cargando={historial.isLoading} conDocumento={false} />
+        </Card>
+      )}
     </>
   );
 }

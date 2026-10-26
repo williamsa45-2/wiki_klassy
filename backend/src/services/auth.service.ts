@@ -28,7 +28,7 @@ export function vistaUsuario(user: UserDocument) {
 export async function solicitarRegistro(datos: { nombre: string; email: string; password: string; motivo: string }) {
   const existente = await User.findOne({ email: datos.email.toLowerCase() });
   if (existente) throw new ApiError(409, 'Ya existe una solicitud o cuenta con ese correo.');
-  await User.create({
+  const user = await User.create({
     nombre: datos.nombre,
     email: datos.email,
     password_hash: await hashearPassword(datos.password),
@@ -36,6 +36,7 @@ export async function solicitarRegistro(datos: { nombre: string; email: string; 
     rol: ROLES.USUARIO,
     estado: ESTADOS_USUARIO.PENDIENTE,
   });
+  return vistaUsuario(user);
 }
 
 export async function iniciarSesion(email: string, password: string) {

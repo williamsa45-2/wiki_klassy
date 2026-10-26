@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { Types } from 'mongoose';
 import { env } from '../config/env';
 import { TipoArchivo } from '../constants/enums';
 import Documento, { DocumentoDocument } from '../models/documento.model';
@@ -92,43 +93,82 @@ interface DatosDocumento {
   etiquetas: string[];
 }
 
+// strength 1: sin distinguir mayúsculas ni tildes, así «Diagrama de Login» y «diagrama de login» son el mismo documento.
+const MISMO_TITULO = { locale: 'es', strength: 1 } as const;
+
+async function cambiarArchivo(doc: DocumentoDocument, archivo: Express.Multer.File) {
+  const anterior = doc.archivo.nombre_guardado;
+  const guardado = await guardarArchivo(archivo);
+  doc.tipo = guardado.tipo;
+  doc.archivo = guardado.archivo;
+  try {
+    await doc.save();
+  } catch (error) {
+    await borrarDeDisco(guardado.archivo.nombre_guardado);
+    throw error;
+  }
+  await borrarDeDisco(anterior);
+}
+
+/**
+ * Subir con el título de un documento que ya existe es una actualización de ese documento, no un duplicado:
+ * se reemplaza su archivo y se conservan su id (enlaces, historial). Descripción y etiquetas vacías no borran las que tenía.
+ */
 export async function crearDocumento(user: UserDocument, datos: DatosDocumento, archivo: Express.Multer.File | undefined) {
   if (!archivo) throw new ApiError(400, 'Falta el archivo.');
   if (!(await Seccion.exists({ _id: datos.seccion_id }))) throw new ApiError(404, 'La sección no existe.');
+
+  const existente = await Documento.findOne({ titulo: datos.titulo }).collation(MISMO_TITULO);
+  if (existente) {
+    existente.seccion_id = new Types.ObjectId(datos.seccion_id);
+    if (datos.descripcion) existente.descripcion = datos.descripcion;
+    if (datos.etiquetas.length) existente.etiquetas = datos.etiquetas;
+    await cambiarArchivo(existente, archivo);
+    return { id: String(existente._id), titulo: existente.titulo, actualizado: true };
+  }
+
   const guardado = await guardarArchivo(archivo);
   try {
     const doc = await Documento.create({ ...datos, ...guardado, subido_por: user._id });
-    return String(doc._id);
+    return { id: String(doc._id), titulo: doc.titulo, actualizado: false };
   } catch (error) {
     await borrarDeDisco(guardado.archivo.nombre_guardado);
     throw error;
   }
 }
 
+const NOMBRES_CAMPO: Record<keyof DatosDocumento, string> = { titulo: 'título', descripcion: 'descripción', seccion_id: 'sección', etiquetas: 'etiquetas' };
+
+/** Devuelve el resumen de lo que cambió para el historial (vacío si no cambió nada). */
 export async function actualizarDocumento(id: string, datos: Partial<DatosDocumento>) {
   const doc = await Documento.findById(id);
   if (!doc) throw new ApiError(404, 'Documento no encontrado.');
   if (datos.seccion_id && !(await Seccion.exists({ _id: datos.seccion_id }))) throw new ApiError(404, 'La sección no existe.');
+  const tituloAnterior = doc.titulo;
   doc.set(datos);
+  if (doc.isModified('titulo') && (await Documento.exists({ _id: { $ne: doc._id }, titulo: doc.titulo }).collation(MISMO_TITULO))) {
+    throw new ApiError(409, 'Ya existe otro documento con ese título. Para actualizarlo, sube el archivo con ese título.');
+  }
+  const cambios = (Object.keys(NOMBRES_CAMPO) as (keyof DatosDocumento)[])
+    .filter((campo) => doc.isModified(campo))
+    .map((campo) => (campo === 'titulo' ? `título («${tituloAnterior}» → «${doc.titulo}»)` : NOMBRES_CAMPO[campo]));
   await doc.save();
+  return { titulo: doc.titulo, cambios };
 }
 
 export async function reemplazarArchivo(id: string, archivo: Express.Multer.File | undefined) {
   if (!archivo) throw new ApiError(400, 'Falta el archivo.');
   const doc = await Documento.findById(id);
   if (!doc) throw new ApiError(404, 'Documento no encontrado.');
-  const anterior = doc.archivo.nombre_guardado;
-  const guardado = await guardarArchivo(archivo);
-  doc.tipo = guardado.tipo;
-  doc.archivo = guardado.archivo;
-  await doc.save();
-  await borrarDeDisco(anterior);
+  await cambiarArchivo(doc, archivo);
+  return { titulo: doc.titulo };
 }
 
 export async function eliminarDocumento(id: string) {
   const doc = await Documento.findByIdAndDelete(id);
   if (!doc) throw new ApiError(404, 'Documento no encontrado.');
   await borrarDeDisco(doc.archivo.nombre_guardado);
+  return { titulo: doc.titulo };
 }
 
 /** Devuelve la ruta en disco ya autorizada. Con `descargar` exige el permiso de descarga; sin él basta con el de ver. */

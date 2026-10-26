@@ -7,5 +7,5 @@ export async function orientarPregunta(req: Request, res: Response) {
 }
 
 export async function actividad(req: Request, res: Response) {
-  res.json(await listarActividad(Number(req.query.limite) || 100));
+  res.json(await listarActividad(Number(req.query.limite) || 100, { soloCambios: req.query.cambios === '1' }));
 }

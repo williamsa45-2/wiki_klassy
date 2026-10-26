@@ -45,8 +45,8 @@ export async function fijarAccesoHasta(req: Request, res: Response) {
 }
 
 export async function restablecerPassword(req: Request, res: Response) {
-  await usuarios.restablecerPassword(id(req), req.body.password);
-  await auditar(req, 'Restableció una contraseña');
+  const usuario = await usuarios.restablecerPassword(id(req), req.body.password);
+  await auditar(req, `Restableció la contraseña de ${usuario.email}`);
   res.status(204).end();
 }
 
@@ -57,18 +57,20 @@ export async function listarPermisos(req: Request, res: Response) {
 export async function otorgarPermiso(req: Request, res: Response) {
   const { duracion_minutos: _duracion, hasta: _hasta, ...resto } = req.body;
   const permiso = await usuarios.otorgarPermiso(id(req), req.user!, { ...resto, hasta: limiteDe(req) });
-  await auditar(req, `Concedió permiso a ${id(req)}`, ACCIONES_ACTIVIDAD.PERMISO_CONCEDIDO);
+  await auditar(req, `Concedió permiso a ${await usuarios.correoDeUsuario(id(req))}`, ACCIONES_ACTIVIDAD.PERMISO_CONCEDIDO);
   res.status(201).json(permiso);
 }
 
 export async function actualizarPermiso(req: Request, res: Response) {
   const { duracion_minutos, hasta, ...resto } = req.body;
   const cambios = duracion_minutos !== undefined || hasta !== undefined ? { ...resto, hasta: limiteDe(req) } : resto;
-  res.json(await usuarios.actualizarPermiso(String(req.params.permisoId), cambios));
+  const permiso = await usuarios.actualizarPermiso(String(req.params.permisoId), cambios);
+  await auditar(req, `Editó un permiso de ${await usuarios.correoDeUsuario(permiso.usuario_id)}`, ACCIONES_ACTIVIDAD.PERMISO_ACTUALIZADO);
+  res.json(permiso);
 }
 
 export async function revocarPermiso(req: Request, res: Response) {
   const permiso = await usuarios.revocarPermiso(String(req.params.permisoId));
-  await auditar(req, `Revocó el permiso ${permiso.id}`, ACCIONES_ACTIVIDAD.PERMISO_REVOCADO);
+  await auditar(req, `Revocó un permiso de ${await usuarios.correoDeUsuario(permiso.usuario_id)}`, ACCIONES_ACTIVIDAD.PERMISO_REVOCADO);
   res.json(permiso);
 }

@@ -74,6 +74,10 @@ export function useRevocarPermiso() {
   return useMutation({ mutationFn: (id: string) => api.post(`/permisos/${id}/revocar`), onSuccess: invalidar });
 }
 
-export function useActividad() {
-  return useQuery({ queryKey: ['actividad'], queryFn: () => api.get<Actividad[]>('/actividad?limite=200'), staleTime: 0 });
+export function useActividad(soloCambios: boolean) {
+  return useQuery({
+    queryKey: ['actividad', { soloCambios }],
+    queryFn: () => api.get<Actividad[]>(`/actividad?limite=200${soloCambios ? '&cambios=1' : ''}`),
+    staleTime: 0,
+  });
 }

@@ -39,6 +39,7 @@ router.post('/secciones', validar(v.seccionNueva), catchAsync(seccionCtl.crear))
 router.patch('/secciones/:id', validar(v.seccionEdicion), catchAsync(seccionCtl.actualizar));
 router.delete('/secciones/:id', catchAsync(seccionCtl.eliminar));
 
+router.get('/documentos/:id/historial', catchAsync(documentoCtl.historial));
 router.post('/documentos', subida, validar(v.documentoNuevo), catchAsync(documentoCtl.crear));
 router.patch('/documentos/:id', validar(v.documentoEdicion), catchAsync(documentoCtl.actualizar));
 router.put('/documentos/:id/archivo', subida, catchAsync(documentoCtl.reemplazarArchivo));

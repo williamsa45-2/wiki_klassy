@@ -53,15 +53,23 @@ async function validarPadre(id: string | null, propia?: string) {
 export async function crearSeccion(datos: DatosSeccion) {
   await validarPadre(datos.padre_id);
   const seccion = await Seccion.create(datos);
-  return { id: String(seccion._id) };
+  return { id: String(seccion._id), nombre: seccion.nombre };
 }
 
+const NOMBRES_CAMPO: Record<keyof DatosSeccion, string> = { nombre: 'nombre', descripcion: 'descripción', padre_id: 'ubicación', orden: 'orden' };
+
+/** Devuelve el resumen de lo que cambió para el historial (vacío si no cambió nada). */
 export async function actualizarSeccion(id: string, datos: Partial<DatosSeccion>) {
   const seccion = await Seccion.findById(id);
   if (!seccion) throw new ApiError(404, 'Sección no encontrada.');
   if (datos.padre_id !== undefined) await validarPadre(datos.padre_id, id);
+  const nombreAnterior = seccion.nombre;
   seccion.set(datos);
+  const cambios = (Object.keys(NOMBRES_CAMPO) as (keyof DatosSeccion)[])
+    .filter((campo) => seccion.isModified(campo))
+    .map((campo) => (campo === 'nombre' ? `nombre («${nombreAnterior}» → «${seccion.nombre}»)` : NOMBRES_CAMPO[campo]));
   await seccion.save();
+  return { nombre: seccion.nombre, cambios };
 }
 
 /** Una sección con contenido no se borra: se vaciaría la wiki sin querer. */
@@ -70,4 +78,5 @@ export async function eliminarSeccion(id: string) {
   if (hijas > 0 || documentos > 0) throw new ApiError(409, 'La sección tiene subsecciones o documentos. Muévelos o elimínalos primero.');
   const borrada = await Seccion.findByIdAndDelete(id);
   if (!borrada) throw new ApiError(404, 'Sección no encontrada.');
+  return { nombre: borrada.nombre };
 }

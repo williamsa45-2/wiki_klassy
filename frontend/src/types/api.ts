@@ -90,5 +90,5 @@ export interface Actividad {
   ip: string;
   fecha: string;
   usuario: { id: string; nombre: string; email: string } | null;
-  documento: { id: string; titulo: string } | null;
+  documento_id: string | null;
 }

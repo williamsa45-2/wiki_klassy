@@ -21,6 +21,7 @@ import {
   useSubirDocumento,
 } from '../hooks/useBiblioteca';
 import { mensajeDeError } from '../lib/api';
+import { tituloDesdePaginas } from '../lib/drawio';
 import { fecha, tamanoLegible } from '../lib/fechas';
 import { NOMBRES_TIPO, type Documento, type Seccion } from '../types/api';
 
@@ -69,7 +70,22 @@ function DrawerSeccion({ seccion, secciones, abierto, onClose }: { seccion: Secc
   );
 }
 
-function DrawerDocumento({ documento, secciones, abierto, onClose }: { documento: Documento | null; secciones: Seccion[]; abierto: boolean; onClose: () => void }) {
+// Igual que el servidor (collation es, strength 1): sin distinguir mayúsculas ni tildes.
+const claveDeTitulo = (titulo: string) => titulo.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function DrawerDocumento({
+  documento,
+  documentos,
+  secciones,
+  abierto,
+  onClose,
+}: {
+  documento: Documento | null;
+  documentos: Documento[];
+  secciones: Seccion[];
+  abierto: boolean;
+  onClose: () => void;
+}) {
   const subir = useSubirDocumento();
   const actualizar = useActualizarDocumento();
   const [titulo, setTitulo] = useState(documento?.titulo ?? '');
@@ -78,6 +94,8 @@ function DrawerDocumento({ documento, secciones, abierto, onClose }: { documento
   const [etiquetas, setEtiquetas] = useState(documento?.etiquetas.join(', ') ?? '');
   const [archivo, setArchivo] = useState<File | null>(null);
   const mutacion = documento ? actualizar : subir;
+  // Al subir, un título que ya existe actualiza ese documento (nuevo archivo) en vez de crear otro.
+  const existente = !documento && titulo.trim() ? documentos.find((d) => claveDeTitulo(d.titulo) === claveDeTitulo(titulo)) : undefined;
 
   function enviar(e: FormEvent) {
     e.preventDefault();
@@ -104,7 +122,7 @@ function DrawerDocumento({ documento, secciones, abierto, onClose }: { documento
       title={documento ? 'Editar documento' : 'Subir documento'}
       onClose={onClose}
       onSubmit={enviar}
-      submitLabel={documento ? 'Guardar' : 'Subir'}
+      submitLabel={documento ? 'Guardar' : existente ? 'Actualizar' : 'Subir'}
       isSubmitting={mutacion.isPending}
       submitDisabled={!documento && !archivo}
     >
@@ -121,7 +139,10 @@ function DrawerDocumento({ documento, secciones, abierto, onClose }: { documento
             onChange={(e) => {
               const f = e.target.files?.[0] ?? null;
               setArchivo(f);
-              if (f && !titulo) setTitulo(f.name.replace(/\.[^.]+$/, ''));
+              if (!f) return;
+              if (!titulo) setTitulo(f.name.replace(/\.[^.]+$/, ''));
+              // En un draw.io el título lo dan sus páginas, aunque ya hubiera uno escrito.
+              if (/\.(drawio|dio)$/i.test(f.name)) void tituloDesdePaginas(f).then((t) => t && setTitulo(t));
             }}
             className="block w-full text-sm text-body file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-3 file:py-2 file:font-semibold file:text-primary"
           />
@@ -129,6 +150,12 @@ function DrawerDocumento({ documento, secciones, abierto, onClose }: { documento
         </div>
       )}
       <Input label="Título" value={titulo} onChange={(e) => setTitulo(e.target.value)} required maxLength={200} />
+      {existente && (
+        <Alert tone="info">
+          Ya existe «{existente.titulo}» en {existente.ruta}. Se subirá como una actualización: se reemplaza su archivo y queda en su historial. La
+          descripción y las etiquetas vacías no borran las que tiene.
+        </Alert>
+      )}
       <Select label="Sección" value={seccionId} onChange={(e) => setSeccionId(e.target.value)} required>
         <option value="">— Elige una sección —</option>
         <OpcionesSeccion secciones={secciones} />
@@ -281,7 +308,7 @@ export default function ContenidoPage() {
 
       {/* key: el formulario arranca limpio cada vez que se abre con otro registro */}
       {drawerSeccion && <DrawerSeccion key={drawerSeccion.seccion?.id ?? 'nueva'} seccion={drawerSeccion.seccion} secciones={lista} abierto onClose={() => setDrawerSeccion(null)} />}
-      {drawerDocumento && <DrawerDocumento key={drawerDocumento.documento?.id ?? 'nuevo'} documento={drawerDocumento.documento} secciones={lista} abierto onClose={() => setDrawerDocumento(null)} />}
+      {drawerDocumento && <DrawerDocumento key={drawerDocumento.documento?.id ?? 'nuevo'} documento={drawerDocumento.documento} documentos={documentos.data ?? []} secciones={lista} abierto onClose={() => setDrawerDocumento(null)} />}
     </>
   );
 }

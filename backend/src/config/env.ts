@@ -12,6 +12,8 @@ if (enProduccion && jwtSecret.length < 32) {
   throw new Error('JWT_SECRET debe tener al menos 32 caracteres en producción.');
 }
 
+const carpetaArchivos = path.resolve(process.env.CARPETA_ARCHIVOS || path.join(__dirname, '..', '..', 'uploads'));
+
 export const env = {
   nodeEnv,
   port: Number(process.env.PORT) || 4100,
@@ -23,8 +25,10 @@ export const env = {
   /** Cuántos proxies hay delante del API (nginx = 1; Caddy + nginx = 2). De esto depende que el límite de intentos use la IP real y no la del proxy. */
   proxiesConfiables: Number(process.env.TRUST_PROXY ?? 1),
   /** Carpeta privada de archivos: nunca se sirve como estática, solo a través de un endpoint con sesión y permiso. */
-  carpetaArchivos: path.resolve(process.env.CARPETA_ARCHIVOS || path.join(__dirname, '..', '..', 'uploads')),
+  carpetaArchivos,
   maxArchivoMb: Number(process.env.MAX_ARCHIVO_MB) || 50,
+  /** Historial de actividad en archivo plano (una línea JSON por evento, solo se agrega). Por defecto junto a los archivos: mismo volumen y mismo respaldo. */
+  archivoHistorial: path.resolve(process.env.ARCHIVO_HISTORIAL || path.join(carpetaArchivos, 'historial.jsonl')),
   /** Opcional: sin clave, el asistente usa la búsqueda local por palabras. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
   asistenteModelo: process.env.ASISTENTE_MODELO || 'claude-haiku-5-5',

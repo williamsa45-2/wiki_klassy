@@ -19,6 +19,11 @@ async function buscarUsuario(id: string): Promise<UserDocument> {
   return user;
 }
 
+/** Para el historial: un correo se lee, un id no. */
+export async function correoDeUsuario(id: string) {
+  return (await User.findById(id).select('email').lean())?.email ?? id;
+}
+
 async function exigirOtroAdminActivo(excluirId: string) {
   const otros = await User.countDocuments({ _id: { $ne: excluirId }, rol: ROLES.ADMIN, estado: ESTADOS_USUARIO.ACTIVO });
   if (otros === 0) throw new ApiError(409, 'Debe quedar al menos un administrador activo.');
@@ -86,6 +91,7 @@ export async function restablecerPassword(id: string, password: string) {
   user.password_hash = await hashearPassword(password);
   user.version_sesion += 1;
   await user.save();
+  return vistaUsuario(user);
 }
 
 interface DatosPermiso {
@@ -100,6 +106,7 @@ interface DatosPermiso {
 
 function vistaPermiso(p: {
   _id: unknown;
+  usuario_id: unknown;
   seccion_id: unknown;
   ver: boolean;
   descargar: boolean;
@@ -113,6 +120,7 @@ function vistaPermiso(p: {
   const vigente = estaVigente(concesionDe(p), new Date());
   return {
     id: String(p._id),
+    usuario_id: String(p.usuario_id),
     seccion_id: p.seccion_id ? String(p.seccion_id) : null,
     ver: p.ver,
     descargar: p.descargar,

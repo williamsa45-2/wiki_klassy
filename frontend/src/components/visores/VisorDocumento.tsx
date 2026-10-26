@@ -63,29 +63,12 @@ const ORIGEN_DRAWIO = 'https://embed.diagrams.net';
 // lightbox=1 + chrome=0: modo visor, sin barras de edición; el XML viaja por postMessage, no se sube a ningún servidor.
 const URL_DRAWIO = `${ORIGEN_DRAWIO}/?embed=1&proto=json&spin=1&ui=min&lightbox=1&chrome=0&noSaveBtn=1&noExitBtn=1`;
 
-/** Las hojas se ven con el título del documento en la wiki (numerado si hay varias); el archivo guardado no cambia. */
-function nombrarHojas(xml: string, titulo: string): string {
-  const dom = new DOMParser().parseFromString(xml, 'application/xml');
-  if (dom.getElementsByTagName('parsererror').length) return xml;
-  const raiz = dom.documentElement;
-  if (raiz.nodeName === 'mxGraphModel') {
-    const archivo = dom.createElement('mxfile');
-    const hoja = dom.createElement('diagram');
-    dom.replaceChild(archivo, raiz);
-    hoja.appendChild(raiz);
-    archivo.appendChild(hoja);
-  }
-  const hojas = Array.from(dom.getElementsByTagName('diagram'));
-  hojas.forEach((hoja, i) => hoja.setAttribute('name', hojas.length > 1 ? `${titulo} (${i + 1} de ${hojas.length})` : titulo));
-  return new XMLSerializer().serializeToString(dom);
-}
-
 function VisorDrawio({ blob, titulo }: { blob: Blob; titulo: string }) {
   const marco = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     let xml: string | null = null;
     void blob.text().then((t) => {
-      xml = nombrarHojas(t, titulo);
+      xml = t;
     });
     const alMensaje = async (e: MessageEvent) => {
       if (e.origin !== ORIGEN_DRAWIO || e.source !== marco.current?.contentWindow) return;
@@ -96,13 +79,13 @@ function VisorDrawio({ blob, titulo }: { blob: Blob; titulo: string }) {
         return;
       }
       if (datos.event === 'init') {
-        xml ??= nombrarHojas(await blob.text(), titulo);
+        xml ??= await blob.text();
         marco.current?.contentWindow?.postMessage(JSON.stringify({ action: 'load', xml, autosave: 0 }), ORIGEN_DRAWIO);
       }
     };
     window.addEventListener('message', alMensaje);
     return () => window.removeEventListener('message', alMensaje);
-  }, [blob, titulo]);
+  }, [blob]);
   return <iframe ref={marco} title={titulo} src={URL_DRAWIO} className="h-[75vh] w-full rounded-lg border border-border bg-surface" />;
 }
 
